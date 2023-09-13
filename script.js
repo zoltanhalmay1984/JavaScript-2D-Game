@@ -20,7 +20,7 @@ window.addEventListener('load', function () {
             this.dy = 0;
             this.speedModifier = 3;
             this.spriteWidth = 255;
-            this.spriteHeight = 255;
+            this.spriteHeight = 256;
             this.width = this.spriteWidth;
             this.height = this.spriteHeight;
             this.spriteX; //these two properties will define the top left corner of spritesheet frame image that we are curretly drawing to represent the player
@@ -78,21 +78,21 @@ window.addEventListener('load', function () {
             else if (this.collisionX > this.game.width - this.collisionRadius) this.collisionX = this.game.width - this.collisionRadius;
             //vertical boundaries
             if (this.collisionY < this.game.topMargin + this.collisionRadius) this.collisionY = this.game.topMargin + this.collisionRadius;
-            else if (this. collisionY > this.game.height -this.collisionRadius) this. collisionY = this.game.height -this.collisionRadius;
+            else if (this.collisionY > this.game.height - this.collisionRadius) this.collisionY = this.game.height - this.collisionRadius;
 
-                //collision with obstacles
-                this.game.obstacles.forEach(obstacle => {
-                    // [(distance < sumOfRadii), distance, sumOfRadii, dx, dy] this is just a copy, help to know how to work with the return array from another function;
-                    let [collision, distance, sumOfRadii, dx, dy] = this.game.checkCollision(this, obstacle); //JavaScript destructuring
-                    //let collision = game.checkCollision(this,obstacle)[0] its an explanation of the line above
-                    //let distance = game.checkCollision(this,obstacle)[1] same here
-                    if (collision) {
-                        const unit_x = dx / distance;
-                        const unit_y = dy / distance;
-                        this.collisionX = obstacle.collisionX + (sumOfRadii + 1) * unit_x;
-                        this.collisionY = obstacle.collisionY + (sumOfRadii + 1) * unit_y;
-                    }
-                });
+            //collision with obstacles
+            this.game.obstacles.forEach(obstacle => {
+                // [(distance < sumOfRadii), distance, sumOfRadii, dx, dy] this is just a copy, help to know how to work with the return array from another function;
+                let [collision, distance, sumOfRadii, dx, dy] = this.game.checkCollision(this, obstacle); //JavaScript destructuring
+                //let collision = game.checkCollision(this,obstacle)[0] its an explanation of the line above
+                //let distance = game.checkCollision(this,obstacle)[1] same here
+                if (collision) {
+                    const unit_x = dx / distance;
+                    const unit_y = dy / distance;
+                    this.collisionX = obstacle.collisionX + (sumOfRadii + 1) * unit_x;
+                    this.collisionY = obstacle.collisionY + (sumOfRadii + 1) * unit_y;
+                }
+            });
         }
     }
 
@@ -123,10 +123,53 @@ window.addEventListener('load', function () {
                 context.fill();
                 context.restore();
                 context.stroke();
-                context.beginPath();
             }
         }
     }
+
+    class Egg {
+        constructor(game) {
+            this.game = game;
+            this.collisionRadius = 40;
+            this.margin = this.collisionRadius * 2;
+            this.collisionX = this.margin + (Math.random() * (this.game.width - this.margin * 2));
+            this.collisionY = this.game.topMargin + (Math.random() * (this.game.height - this.game.topMargin - this.margin));
+            this.image = document.getElementById('egg');
+            this.spriteWidth = 110;
+            this.spriteHeight = 135;
+            this.width = this.spriteWidth;
+            this.height = this.spriteHeight;
+            this.spriteX;
+            this.spriteY;
+        }
+        draw(context) {
+            context.drawImage(this.image, this.spriteX, this.spriteY);
+            if (this.game.debug) {
+                context.beginPath();
+                context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
+                context.save();
+                context.globalAlpha = 0.5;
+                context.fill();
+                context.restore();
+                context.stroke();
+            }
+        }
+        update() {
+            this.spriteX = this.collisionX - this.width * 0.5;
+            this.spriteY = this.collisionY - this.height * 0.5 - 30;
+            let collisionObjects = [this.game.player, ...this.game.obstacles];
+            collisionObjects.forEach(object => {
+                let [collision, distance, sumOfRadii, dx, dy] = this.game.checkCollision(this, object);
+                if (collision) {
+                    const unit_x = dx / distance;
+                    const unit_y = dy / distance;
+                    this.collisionX = object.collisionX + (sumOfRadii + 1) * unit_x;
+                    this.collisionY = object.collisionY + (sumOfRadii + 1) * unit_y;
+                }
+            });
+        }
+    }
+
     class Game {
         constructor(canvas) {
             this.canvas = canvas;
@@ -135,8 +178,15 @@ window.addEventListener('load', function () {
             this.topMargin = 260;
             this.debug = true;
             this.player = new Player(this);
+            this.fps = 70;
+            this.timer = 0;
+            this.interval = 1000 / this.fps;
+            this.eggTimer = 0;
+            this.eggInterval = 500;
             this.numberOfObstacles = 10;
+            this.maxEggs = 10;
             this.obstacles = [];
+            this.eggs = [];
             this.mouse = {
                 x: this.width * 0.5,
                 y: this.height * 0.5,
@@ -163,10 +213,28 @@ window.addEventListener('load', function () {
                 if (e.key == 'd') this.debug = !this.debug;
             });
         }
-        render(context) {
-            this.obstacles.forEach(obstacle => obstacle.draw(context));
-            this.player.draw(context);
-            this.player.update();
+        render(context, deltaTime) {
+            if (this.timer > this.interval) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                this.obstacles.forEach(obstacle => obstacle.draw(context));
+                this.eggs.forEach(egg => {
+                    egg.draw(context);
+                    egg.update();
+                });
+                this.player.draw(context);
+                this.player.update();
+                this.timer = 0;
+            }
+            this.timer += deltaTime;
+
+            //add egg periodically
+            if (this.eggTimer > this.eggInterval && this.eggs.length < this.maxEggs) {
+                this.addEgg();
+                this.eggTimer = 0;
+                console.log(this.eggs);
+            } else {
+                this.eggTimer += deltaTime;
+            }
         }
         checkCollision(a, b) {
             const dx = a.collisionX - b.collisionX;
@@ -174,6 +242,9 @@ window.addEventListener('load', function () {
             const distance = Math.hypot(dy, dx);
             const sumOfRadii = a.collisionRadius + b.collisionRadius;
             return [(distance < sumOfRadii), distance, sumOfRadii, dx, dy];
+        }
+        addEgg() {
+            this.eggs.push(new Egg(this));
         }
         init() { //initialize
             let attempts = 0; //Brute force algorythm is not very smart, it just tries over and over many times.
@@ -203,10 +274,12 @@ window.addEventListener('load', function () {
     game.init();
     console.log(game);
 
-    function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        game.render(ctx);
+    let lastTime = 0;
+    function animate(timeStamp) {
+        const deltaTime = timeStamp - lastTime;
+        lastTime = timeStamp;
+        game.render(ctx, deltaTime);
         requestAnimationFrame(animate);
     }
-    animate();
+    animate(0);
 });
