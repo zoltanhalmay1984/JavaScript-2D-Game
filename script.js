@@ -6,7 +6,7 @@ window.addEventListener('load', function () {
 
     ctx.fillStyle = 'white';
     ctx.lineWidth = 3;
-    ctx.strokeStyle = 'white';
+    ctx.strokeStyle = 'black';
     ctx.font = '40px Helvetica';
     ctx.textAlign = 'center';
 
@@ -147,7 +147,7 @@ window.addEventListener('load', function () {
             this.spriteX;
             this.spriteY;
             this.hatchTimer = 0;
-            this.hatchInterval = 3000; //3000 milliseconds = 3 seconds
+            this.hatchInterval = 10000; // milliseconds
             this.markedForDeletion = false;
         }
         draw(context) {
@@ -179,7 +179,7 @@ window.addEventListener('load', function () {
                 }
             });
             //hatching
-            if (this.hatchTimer > this.hatchInterval) {
+            if (this.hatchTimer > this.hatchInterval || this.collisionY < this.game.topMargin) {
                 this.game.hatchlings.push(new Larva(this.game, this.collisionX, this.collisionY));
                 this.markedForDeletion = true;
                 this.game.removeGameObjects();
@@ -222,11 +222,14 @@ window.addEventListener('load', function () {
             this.collisionY -= this.speedY;
             this.spriteX = this.collisionX - this.width * 0.5;
             this.spriteY = this.collisionY - this.height * 0.5 - 50;
-            //moved to safety
+            //move to safety
             if (this.collisionY < this.game.topMargin) {
                 this.markedForDeletion = true;
                 this.game.removeGameObjects();
                 this.game.score++;
+                for (let i = 0; i < 5; i++) {
+                    this.game.particles.push(new Firefly(this.game, this.collisionX, this.collisionY, 'yellow'));
+                }
             }
             //collision with objects
             let collisionObjects = [this.game.player, ...this.game.obstacles];
@@ -245,6 +248,9 @@ window.addEventListener('load', function () {
                     this.markedForDeletion = true;
                     this.game.removeGameObjects();
                     this.game.lostHatchlings++;
+                    for (let i = 0; i < 5; i++) {
+                        this.game.particles.push(new Spark(this.game, this.collisionX, this.collisionY, 'white'));
+                    }
                 }
             });
         }
@@ -255,7 +261,7 @@ window.addEventListener('load', function () {
             this.game = game;
             this.collisionRadius = 30;
             this.speedX = Math.random() * 3 + 0.5;
-            this.image = document.getElementById('toad');
+            this.image = document.getElementById('toads');
             this.spriteWidth = 140;
             this.spriteHeight = 260;
             this.width = this.spriteWidth;
@@ -264,9 +270,11 @@ window.addEventListener('load', function () {
             this.collisionY = this.game.topMargin + (Math.random() * (this.game.height - this.game.topMargin));
             this.spriteX;
             this.spriteY;
+            this.frameX = 0;
+            this.frameY = Math.floor(Math.random() * 4);
         }
         draw(context) {
-            context.drawImage(this.image, this.spriteX, this.spriteY);
+            context.drawImage(this.image, this.frameX * this.spriteWidth, this.frameY * this.spriteHeight, this.spriteWidth, this.spriteHeight, this.spriteX, this.spriteY, this.width, this.height);
             if (this.game.debug) {
                 context.beginPath();
                 context.arc(this.collisionX, this.collisionY, this.collisionRadius, 0, Math.PI * 2);
@@ -284,6 +292,7 @@ window.addEventListener('load', function () {
             if (this.spriteX + this.width < 0) {
                 this.collisionX = this.game.width + this.width + Math.random() * this.game.width * 0.5;
                 this.collisionY = this.game.topMargin + (Math.random() * (this.game.height - this.game.topMargin));
+                this.frameY = Math.floor(Math.random() * 4);
             }
             let collisionObjects = [this.game.player, ...this.game.obstacles];
             collisionObjects.forEach(object => {
@@ -295,6 +304,55 @@ window.addEventListener('load', function () {
                     this.collisionY = object.collisionY + (sumOfRadii + 1) * unit_y;
                 }
             });
+        }
+    }
+
+    class Particle {
+        constructor(game, x, y, color) {
+            this.game = game;
+            this.collisionX = x;
+            this.collisionY = y;
+            this.color = color;
+            this.radius = Math.floor(Math.random() * 10 + 5);
+            this.speedX = Math.random() * 6 - 3;
+            this.speedY = Math.random() * 2 + 0.5;
+            this.angle = 0;
+            this.va = Math.random() * 0.1 + 0.01;
+            this.markedForDeletion = false;
+        }
+        draw(context) {
+            context.save();
+            context.fillStyle = this.color;
+            context.beginPath();
+            context.arc(this.collisionX, this.collisionY, this.radius, 0, Math.PI * 2);
+            context.fill();
+            context.stroke();
+            context.restore();
+        }
+    }
+
+    class Firefly extends Particle {
+        update() {
+            this.angle += this.va;
+            this.collisionX += Math.cos(this.angle) * this.speedX;
+            this.collisionY -= this.speedY;
+            if (this.collisionY < 0 - this.radius) {
+                this.markedForDeletion = true;
+                this.game.removeGameObjects();
+            }
+        }
+    }
+
+    class Spark extends Particle {
+        update() {
+            this.angle += this.va * 0.5;
+            this.collisionX -= Math.sin(this.angle) * this.speedX;
+            this.collisionY -= Math.cos(this.angle) * this.speedY;
+            if (this.radius > 0.1) this.radius -= 0.05;
+            if (this.radius < 0.2) {
+                this.markedForDeletion = true;
+                this.game.removeGameObjects();
+            }
         }
     }
 
@@ -312,11 +370,12 @@ window.addEventListener('load', function () {
             this.eggTimer = 0;
             this.eggInterval = 1000;
             this.numberOfObstacles = 10;
-            this.maxEggs = 20;
+            this.maxEggs = 5;
             this.obstacles = [];
             this.eggs = [];
             this.enemies = [];
             this.hatchlings = [];
+            this.particles = [];
             this.gameObjects = [];
             this.score = 0;
             this.lostHatchlings = 0;
@@ -349,7 +408,7 @@ window.addEventListener('load', function () {
         render(context, deltaTime) {
             if (this.timer > this.interval) {
                 context.clearRect(0, 0, canvas.width, canvas.height);
-                this.gameObjects = [this.player, ...this.eggs, ... this.obstacles, ...this.enemies, ...this.hatchlings];
+                this.gameObjects = [this.player, ...this.eggs, ... this.obstacles, ...this.enemies, ...this.hatchlings, ...this.particles];
                 //sort by vertical position
                 this.gameObjects.sort((a, b) => {
                     return a.collisionY - b.collisionY;
@@ -374,7 +433,7 @@ window.addEventListener('load', function () {
             context.save();
             context.textAlign = 'left';
             context.fillText('Score: ' + this.score, 25, 50);
-            if(this.debug){
+            if (this.debug) {
                 context.fillText('Lost: ' + this.lostHatchlings, 25, 100);
             }
             context.restore();
@@ -396,9 +455,10 @@ window.addEventListener('load', function () {
         removeGameObjects() {
             this.eggs = this.eggs.filter(object => !object.markedForDeletion);
             this.hatchlings = this.hatchlings.filter(object => !object.markedForDeletion);
+            this.particles = this.particles.filter(object => !object.markedForDeletion);
         }
         init() { //initialize
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i < 5; i++) {
                 this.addEnemy();
             }
             let attempts = 0; //Brute force algorythm is not very smart, it just tries over and over many times.
